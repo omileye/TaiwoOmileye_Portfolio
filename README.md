@@ -6,6 +6,6 @@ OmitechAI data science portfolio
 * using support vector machine for classification
 
 
-# Project 2: [Exploratory Data Analysis of Breast Cancer](https://github.com/omileye/Breast-Cancer-Survival-Analysis/blob/main/HERB.%20CANCER%20SURVIVAL%20DATA%20ANALYST.ipynb)
+# [Project 2: Exploratory Data Analysis of Breast Cancer](https://github.com/omileye/Breast-Cancer-Survival-Analysis/blob/main/HERB.%20CANCER%20SURVIVAL%20DATA%20ANALYST.ipynb)
 * Using pairplot, violin plot and multidistribution vector to show the correlation of variable with cancer nodes
 * optimized multivariable correlation using heatmap
