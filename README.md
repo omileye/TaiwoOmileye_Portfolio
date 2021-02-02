@@ -1,7 +1,7 @@
 # TaiwoOmileye_Portfolio
 OmitechAI data science portfolio
 
-# Project 1: Hotel price prediction 
+# [Project 1: Hotel price prediction](https://github.com/omileye/usda-price-prediction/blob/master/USDA_Price_Prediction_Ensemble.ipynb)
 * using linear regression to build a supervised machine learning algorithm
 
 
