@@ -9,4 +9,4 @@ OmitechAI data science portfolio
 # [Project 2: Exploratory Data Analysis of Breast Cancer](https://github.com/omileye/Breast-Cancer-Survival-Analysis/blob/main/HERB.%20CANCER%20SURVIVAL%20DATA%20ANALYST.ipynb)
 * Using pairplot, violin plot and multidistribution vector to show the correlation of variable with cancer nodes
 * optimized multivariable correlation using heatmap
-https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/images/downloadeda.png
+![](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/images/downloadeda.png)
