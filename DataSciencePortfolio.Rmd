@@ -1,0 +1,3218 @@
+---
+title: "Portfolio"
+author: "Taiwo Omileye"
+date: "5/20/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# PART A
+## Load packages
+
+This example uses the `tidyverse` suite of packages.  
+
+```{r, load_tidyverse}
+library(tidyverse)
+library(corrplot)
+library(caret)
+library(ggridges)
+```
+
+## Starting data
+
+There are multiple data sets associated with this project. You will start with a small, simplified design. This will allow you to get practice fitting models, selecting the best model, and making predictions. You will demonstrate selecting optimal input configurations with this simplified design before tackling the more complicated larger problem.  
+
+The simplified data set is read in below. It is assumed that this markdown is located in the same directory as the data. If you want to run this markdown yourself, you should download the data sets from Canvas and place them in the same directory as this .Rmd file. It is **highly** recommended that you work with an RStudio RProject when working on the final project.  
+
+```{r}
+df_start <- readr::read_csv('small_train_data.csv', col_names = TRUE)
+```
+#There are 125 observations, 5 inputs with target variable as response in the above small data set
+The simplified design consists of 5 inputs, `x07`, `x09`, `x10`, `x11`, and `x21`, and one continuous output, `response`. The input variable names are consistent with the larger data set hence why their numbering does not start with `x01`. A glimpse of the data is given below.  
+
+```{r}
+#, read_start_data, show_small_df
+df_start %>% glimpse()
+```
+
+##EXPLORATORY DATA ANALYSIS OF SMALL DATA
+
+```{r}
+#Check for missing values
+visdat::vis_miss(df_start)
+```
+#There is no missing value in the above variables
+
+```{r}
+visdat::vis_dat(df_start)
+```
+
+#All the data type are numeric, hence linear regression model will be appropriate
+
+```{r}
+df_start %>% purrr::map_dbl(n_distinct)
+```
+#There are 125 unique values for each combination of observation
+
+```{r}
+df_start %>% select(-response) %>% summary()
+```
+
+```{r}
+df_start %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid")) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_histogram(bins = 35) +
+  facet_wrap(~name, scales = "free") +
+  theme_bw() +
+  theme(axis.text.y = element_blank())
+```
+#As it can be seen above, the mean and median of the five input distributions are approximately equal indicating even distribution across the input and do not need transformation. Though the response looks gaussian with left skewness. 
+
+```{r}
+df_start %>% skimr::skim()
+```
+
+```{r}
+df_start %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(cols = !c('rowid',"response")) %>% 
+  ggplot(mapping = aes(x=value, y=response))+
+  geom_point()+
+  facet_wrap(~name,scales = "free_x")
+```
+
+
+
+```{r}
+df_start %>% select(-response) %>% 
+  GGally::ggpairs(progress = FALSE, diag = list(continuous = GGally::wrap('barDiag',bins=25))) +
+  theme_bw()
+```
+
+```{r}
+df_start %>% cor() %>%
+  corrplot(method="color")
+```
+
+#The figure above indicate we do not have any significant input correllation between the input variables but the distribution looks uniform instead of gaussian
+
+
+
+##EXPLORATORY DATA ANALYSIS OF LARGE DATA, X-VARIABLE
+
+# REGRESSION PROBLEM TASK
+
+```{r}
+train_x <- readr::read_csv("train_input_set_x.csv", col_names = TRUE)
+```
+
+```{r}
+train_x %>% glimpse()
+train_outputs <- readr::read_csv("train_outputs.csv", col_names = TRUE)
+ready_x_A <- train_x %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -outcome)
+
+ready_x_A %>% glimpse()
+```
+
+
+```{r}
+train_x %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid")) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_histogram(bins = 35) +
+  facet_wrap(~name, scales = "free") +
+  theme_bw() +
+  theme(axis.text.y = element_blank())
+```
+
+```{r}
+train_x %>% skimr::skim()
+```
+
+
+```{r}
+train_x %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid")) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_boxplot() +
+  facet_wrap(~name, scales = "free") +
+  theme_bw() +
+  theme(axis.text.y = element_blank())
+```
+
+```{r, read_data_train_x}
+
+large_train_x_df <- readr::read_csv('train_input_set_x.csv', col_names = TRUE)
+
+large_train_x_df %>% glimpse()
+```
+
+```{r, read_data_train_outputs}
+
+large_train_outputs_df <- readr::read_csv('train_outputs.csv', col_names = TRUE)
+
+large_train_outputs_df %>% glimpse()
+```
+
+
+
+```{r}
+large_train_x_df %>% 
+  left_join(large_train_outputs_df, by = 'run_id') %>% 
+  pivot_longer(!c('run_id', 'response', 'outcome')) %>% 
+  ggplot(aes(x=value, color = outcome)) + 
+  geom_freqpoly(aes(y=stat(density))) + 
+  facet_wrap(~name)
+```
+
+
+
+##EXPLORATORY DATA ANALYSIS OF LARGE DATA, V-VARIABLE
+
+
+```{r}
+train_x <- readr::read_csv("train_input_set_x.csv", col_names = TRUE)
+train_v <- readr::read_csv("train_input_set_v.csv", col_names = TRUE)
+train_outputs <- readr::read_csv("train_outputs.csv", col_names = TRUE)
+```
+
+
+# CLASSIFICATION PROBLEM TASK
+
+The classification training data set for the "x-variables" is created below. The continuous output, `response`, is now dropped while the categorical variable `outcome` is retained with the "x-variable" inputs. The `outcome` variable is converted to a factor data type for you so that way all students will work with the same level (unique category) ordering. The classification training set for the "x-variables" is named `ready_x_B` and is shown via a glimpse below.  
+
+```{r, make_train_set_x_B}
+ready_x_B <- train_x %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -response) %>% 
+  mutate(outcome = factor(outcome, levels = c("event", "non_event")))
+
+ready_x_B %>% glimpse()
+```
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = outcome)) +
+  geom_bar() +
+  geom_text(stat = 'count',
+            mapping = aes(label = stat(count)),
+            color = 'red',
+            nudge_y = 7,
+            size = 5.5) +
+  theme_bw()
+```
+
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = outcome)) +
+  geom_bar(mapping = aes(y = stat(prop),
+                         group = 1)) +
+  geom_text(stat = 'count',
+            mapping = aes(y = after_stat( count / sum(count) ),
+                          label = after_stat( signif(count / sum(count), 3) )),
+            color = 'red', nudge_y = 0.0275, size = 5.5) +
+  theme_bw()
+```
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_histogram(bins = 27) +
+  facet_wrap(~ input_id, scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        strip.text = element_text(size = 6.5))
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = input_id), color = 'red') +
+  theme_bw()
+```
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.25) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+
+The value above appear to concentrate around 0.5 with few exception of input variables and the class-label appear to be even accross input variable.
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.1) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome),
+               position = position_dodge(0.75)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = as.factor(input_id), y = value)) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+The proportion of the event and non-event at each input variables
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = input_id), fill = 'grey') +
+  theme_bw()
+```
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = input_id), fill = 'grey') +
+  facet_wrap(~input_bin, scales = "free_x") +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+
+The distribution looks uniforms for the majority of input variables with 18 to 23 inputs values concentrated at 1 value.
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = interaction(input_id, outcome),
+                            fill = outcome),
+              alpha = 0.55) +
+  facet_wrap(~input_bin, scales = "free_x") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank(),
+        legend.position = "top")
+```
+
+
+Beginning from number id 33 to 43 input variables, the class contribution appear to be similar by focusing on the top-right facet from above.
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  filter(input_id < 23 & input_id > 11) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = interaction(input_id, outcome),
+                            fill = outcome),
+              alpha = 0.55) +
+  facet_wrap(~input_bin, scales = "free_x") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank(),
+        legend.position = "top")
+```
+
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges() +
+  facet_wrap(~input_bin, scales = "free_y") +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+
+Input variables 18 to 23 number id appear to be left-skewed distribution
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges(mapping = aes(fill = outcome),
+                      alpha = 0.5) +
+  facet_wrap(~input_bin, scales = "free_y") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+
+
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  filter(input_id < 23 & input_id > 11) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges(mapping = aes(fill = outcome),
+                      alpha = 0.5) +
+  facet_wrap(~input_bin, scales = "free_y") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = x12, y = x13)) +
+  geom_point(alpha = 0.25, size = 3,
+             mapping = aes(color = outcome)) +
+  coord_equal() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw() +
+  guides(color = guide_legend(override.aes = list(alpha = 1.0)))
+```
+
+
+The two input variables appear to be no correlation as the outcome color coding looks random. For clarification, let's check the correlation plot below.
+
+
+```{r}
+ready_x_B %>% 
+  select(-outcome) %>% 
+  cor() %>% 
+  corrplot::corrplot(method = 'square', type = 'upper') 
+```
+
+
+
+
+```{r}
+ready_x_B %>% 
+  select(-outcome) %>% 
+  cor() %>% 
+  corrplot::corrplot(method = 'square', type = 'upper',
+                     order = 'hclust', hclust.method = 'ward.D2')
+```
+
+
+There is no significant correlation between the input variable above
+
+
+```{r}
+ready_x_B %>% 
+  group_by(outcome) %>% 
+  tidyr::nest() %>% 
+  mutate(cor_wf = map(data, corrr::correlate, quiet = TRUE, diagonal = 1),
+         cor_lf = map(cor_wf, corrr::stretch)) %>% 
+  select(outcome, cor_lf) %>% 
+  tidyr::unnest(cor_lf) %>% 
+  ungroup() %>% 
+  mutate(x_id = stringr::str_extract(x, '\\d+'),
+         y_id = stringr::str_extract(y, '\\d+')) %>% 
+  mutate(x_id = as.integer(x_id),
+         y_id = as.integer(y_id)) %>% 
+  ggplot(mapping = aes(x = as.factor(x_id), y = as.factor(y_id))) +
+  geom_tile(mapping = aes(fill = r), color = 'white') +
+  coord_equal() +
+  facet_wrap(~outcome, labeller = "label_both") +
+  scale_fill_gradient2('corr',
+                       low = 'red', mid='white', high='blue',
+                       midpoint = 0,
+                       limits = c(-1, 1)) +
+  labs(x='', y = '') +
+  theme_bw() +
+  theme(legend.position = "top",
+        axis.text = element_text(size = 5.5))
+```
+
+#PART B
+## Overview
+
+This RMarkdown shows how to download the final project data. It shows how to compile the two input sets with the outputs and define the regression data vs classification data. It also demonstrates how to fit a simple model (with `lm()`), save that model, and load it back into the work space. You may find these actions helpful as you work through the project.  
+
+## Load packages
+
+This example uses the `tidyverse` suite of packages.  
+
+```{r}
+
+library(corrplot)
+library(caret)
+library(yardstick)
+```
+
+## Starting data
+
+There are multiple data sets associated with the final project. You will start with a small, simplified design. This will allow you to get practice fitting models, selecting the best model, and making predictions. You will demonstrate selecting optimal input configurations with this simplified design before tackling the more complicated larger problem.  
+
+The simplified data set is read in below. It is assumed that this markdown is located in the same directory as the data. If you want to run this markdown yourself, you should download the data sets from Canvas and place them in the same directory as this .Rmd file. It is **highly** recommended that you work with an RStudio RProject when working on the final project.  
+
+```{r, read_start_data}
+df_start <- readr::read_csv('small_train_data.csv', col_names = TRUE)
+```
+#There are 125 observations, 5 inputs with target variable as response in the above small data set
+The simplified design consists of 5 inputs, `x07`, `x09`, `x10`, `x11`, and `x21`, and one continuous output, `response`. The input variable names are consistent with the larger data set hence why their numbering does not start with `x01`. A glimpse of the data is given below.  
+
+```{r, show_small_df}
+df_start %>% glimpse()
+```
+
+##EXPLORATORY DATA ANALYSIS OF SMALL DATA
+
+```{r}
+#Check for missing values
+visdat::vis_miss(df_start)
+```
+#There is no missing value in the above variables
+
+```{r}
+visdat::vis_dat(df_start)
+```
+
+#All the data type are numeric, hence linear regression model will be appropriate
+
+```{r}
+df_start %>% purrr::map_dbl(n_distinct)
+```
+#There are 125 unique values for each combination of observation
+
+```{r}
+df_start %>% select(-response) %>% summary()
+```
+#As it can be seen above, the mean and median of the five input distributions are approximately equal indicating normal distribution across the input and do not need transformation 
+
+```{r}
+df_start %>% skimr::skim()
+```
+
+
+
+```{r}
+df_start %>% select(-response) %>% 
+  GGally::ggpairs(progress = FALSE, diag = list(continuous = GGally::wrap('barDiag',bins=25))) +
+  theme_bw()
+```
+
+```{r}
+df_start %>% cor() %>%
+  corrplot(method="color")
+```
+
+#The figure above indicate we do not have any significant input correllation between the input variables but the distribution looks uniform instead of gaussian
+
+
+#Fitting the linear model
+
+```{r}
+set.seed(12)
+FitLinearModel01 <- lm(response ~ x07 + x09 + x10 + x11 + x21, data = df_start, model = TRUE)
+FitLinearModel01 %>% coefplot::coefplot()
+```
+
+```{r}
+FitLinearModel01 %>% readr::write_rds("my_1simple_model.rds")
+```
+
+#All pair-wise interaction with the 5 inputs
+
+```{r}
+set.seed(12)
+FitLinearModel02 <- lm(response ~ (x07 + x09 + x10 + x11 + x21)^2, data = df_start, model = TRUE)
+FitLinearModel02 %>% coefplot::coefplot()
+```
+
+```{r}
+FitLinearModel02 %>% readr::write_rds("my_2simple_model.rds")
+```
+
+#All cubic interaction
+
+```{r}
+set.seed(12)
+FitLinearModel03 <- lm(response ~ (x07 + x09 + x10 + x11 + x21)^3, data = df_start, model = TRUE)
+FitLinearModel03 %>% coefplot::coefplot()
+```
+
+
+```{r}
+FitLinearModel03 %>% readr::write_rds("my_3simple_model.rds")
+```
+
+
+```{r}
+set.seed(12)
+FitLinearModel04 <- lm(response ~ (x07 + I(x09^2) + I(x10^3) + I(x11^4) + x21) * (x07 + I(x09^2) + I(x10^3) + I(x11^4) + x21), data = df_start, model = TRUE)
+FitLinearModel04 %>% coefplot::coefplot()
+```
+
+
+```{r}
+FitLinearModel04 %>% readr::write_rds("my_4simple_model.rds")
+```
+
+
+```{r}
+set.seed(12)
+FitLinearModel05 <- lm(response ~ (x07 + I(x09^2) + I(x10^3) + x11 + I(x21^4)) * (x07 + I(x09^2) + I(x10^3) + x11 + I(x21^4)), data = df_start, model = TRUE)
+FitLinearModel05 %>% coefplot::coefplot()
+```
+
+```{r}
+FitLinearModel05 %>% readr::write_rds("my_5simple_model.rds")
+```
+
+
+```{r}
+set.seed(12)
+FitLinearModel06 <- lm(response ~ splines::ns(x09 + x11,df=12) * (x07 + I(x21^2) + I(x10^3)+ I(x09^4)), data = df_start, model = TRUE)
+FitLinearModel06 %>% coefplot::coefplot()
+```
+
+
+```{r}
+FitLinearModel06 %>% readr::write_rds("my_6simple_model.rds")
+```
+
+
+```{r}
+h1 = FitLinearModel01 %>% broom::glance() %>% mutate(model = 'FitLinearModel01')
+h2 = FitLinearModel02 %>% broom::glance() %>% mutate(model = 'FitLinearModel02')
+h3 = FitLinearModel03 %>% broom::glance() %>% mutate(model = 'FitLinearModel03')
+h4 = FitLinearModel04 %>% broom::glance() %>% mutate(model = 'FitLinearModel04')
+h5 = FitLinearModel05 %>% broom::glance() %>% mutate(model = 'FitLinearModel05')
+h6 = FitLinearModel06 %>% broom::glance() %>% mutate(model = 'FitLinearModel06')
+Result_output = rbind(h1,h2,h3,h4,h5,h6)
+Model_Result = Result_output %>% select(model,r.squared,AIC,BIC)
+Model_Result
+```
+
+```{r}
+model_metric <- function(mod, mod_name)
+{
+  broom::glance(mod) %>%
+    mutate(model_name = mod_name) 
+}
+
+Resultmodel <- purrr::map2_dfr(list(FitLinearModel01,FitLinearModel02,FitLinearModel03,FitLinearModel04,FitLinearModel05,FitLinearModel06),
+                               sprintf('mod-%02d', 1:6),model_metric)
+```
+
+
+
+```{r}
+Resultmodel %>% 
+  ggplot(mapping = aes(x = model_name, y = r.squared)) +
+  geom_linerange(mapping = aes(ymin = 0,
+                               ymax = r.squared)) +
+  geom_point(size = 4.5) +
+  labs(x = '') +
+  theme_bw()
+```
+
+
+```{r}
+Resultmodel %>% 
+  select(model_name, r.squared, AIC, BIC) %>% 
+  pivot_longer(!c("model_name")) %>% 
+  mutate(model_id = stringr::str_extract(model_name, "\\d+")) %>% 
+  ggplot(mapping = aes(x = model_id, y = value)) +
+  geom_point(size = 3.5) +
+  facet_wrap(~name, scales = "free_y") +
+  labs(x = '') +
+  theme_bw()
+```
+
+
+```{r}
+set.seed(12)
+
+train_id <- sample(1:nrow(df_start), size = floor(0.6 * nrow(df_start)))
+
+train_ready <- df_start %>% slice(train_id)
+
+test_ready <- df_start %>% slice(-train_id)
+```
+
+
+```{r}
+fit_and_assess <- function(a_formula, model_name, train_data, test_data, y_name)
+{
+  mod <- lm( a_formula, data = train_data)
+  
+  pred_train <- as.vector(mod$fitted.values)
+  
+  y_train <- train_data %>% dplyr::select(all_of(y_name)) %>% pull()
+  
+  train_metrics <- tibble::tibble(
+    rmse_value = rmse_vec(y_train, pred_train),
+    mae_value = mae_vec(y_train, pred_train),
+    r2_value = rsq_vec(y_train, pred_train)
+  )
+  
+  pred_test <- as.vector(predict(mod, newdata = test_data))
+  
+  y_test <- test_data %>% dplyr::select(all_of(y_name)) %>% pull()
+  
+  test_metrics <- tibble::tibble(
+    rmse_value = rmse_vec(y_test, pred_test),
+    mae_value = mae_vec(y_test, pred_test),
+    r2_value = rsq_vec(y_test, pred_test)
+  )
+  
+  train_metrics %>% mutate(on_set = "train") %>% 
+    bind_rows(test_metrics %>% mutate(on_set = "test")) %>% 
+    mutate(model_name = model_name)
+}
+```
+
+
+```{r}
+set.seed(12)
+one_split_results <- purrr::map2_dfr(list(formula(FitLinearModel01), formula(FitLinearModel02), formula(FitLinearModel03),
+                                          formula(FitLinearModel04), formula(FitLinearModel05), formula(FitLinearModel06)),
+                                     sprintf("mod-%02d", 1:6),
+                                     fit_and_assess,
+                                     train_data = train_ready,
+                                     test_data = test_ready,
+                                     y_name = "response")
+```
+
+
+```{r}
+one_split_results %>% 
+  mutate(model_id = stringr::str_extract(model_name, "\\d+")) %>% 
+  ggplot(mapping = aes(x = model_id, y = rmse_value)) +
+  geom_line(mapping = aes(color = on_set,
+                          group = on_set),
+            size = 1.1) +
+  geom_point(mapping = aes(color = on_set),
+             size = 2.5) +
+  scale_color_brewer("", palette = "Set1") +
+  labs(x = 'model') +
+  theme_bw()
+```
+
+
+
+#As shown above, using all the training set alone for modelling with R-squared metrics, FitLinearModel06 performs the best because of 0.99 r.squraed value close to 1.
+#However, considering other metrics with resampling approach, the FitLinearModel02 and FitLinearModel03 perfoms has the best two models going by the model performance
+#according to the AIC, BIC, and rmse metrics. Hence, FitLinearModel02 and FitLinearModel03 are the best models, the below shows the bayesian modelling of the best two models.
+
+#Therefore, the best model among the 6 models is All pair-wise interactions with the 5 inputs, which is FitLinearModel02.
+
+
+
+#The coefficient summary of the best two models is shown below
+
+```{r}
+FitLinearModel02 %>% coefplot::coefplot()
+FitLinearModel03 %>% coefplot::coefplot()
+```
+
+#The confidence interval coefficients on FitLinearModel03 is wider than the FitLinearModel02, this represent more uncertainty in the beta coefficients while the confidence interval coefficients on FitLinearModel02 is more certain than the FitLinearModel03.
+
+
+You will begin the project by fitting linear models to predict the output, `response`, based on the 5 inputs in the small design of `r nrow(df_start)` observations.  
+
+Let's fit a simple model to this data set. I do not recommend the following model. It is just to demonstrate fitting a model and the code to save that model.  
+
+```{r}
+set.seed(12)
+my_ctrl <- trainControl(method = "repeatedcv", number = 5, repeats = 5, search = "random")
+my_metric <- "RMSE"
+
+fitLinear_Model <- caret::train(response ~ (x07 + x09 + x10 + x11 + x21)^3, 
+                             data = df_start,
+                             method = 'glmnet', 
+                             metric = my_metric, 
+                             preProcess = c('center', 'scale'), 
+                             trControl = my_ctrl)
+print(fitLinear_Model)
+```
+
+```{r}
+set.seed(12)
+min_lambda <- log(min(fitLinear_Model$results$lambda))
+max_lambda <- log(max(fitLinear_Model$results$lambda))
+enet_grid <- expand.grid(alpha = seq(0.1, 0.9, length.out = 9),
+            lambda = exp(seq(min_lambda, max_lambda, length.out = 25)))
+enet_grid %>% glimpse()
+
+enet_tune <- caret::train(response ~ (x07 + x09 + x10 + x11 + x21)^3, data = df_start, method = 'glmnet', metric = my_metric, preProcess = c('center', 'scale'), trControl = my_ctrl, tuneGrid = enet_grid)
+#print(enet_tune)
+ggplot(varImp(enet_tune))
+```
+
+
+```{r}
+print(enet_tune$bestTune)
+plot(enet_tune, xTrans = log)
+```
+
+```{r}
+coef(enet_tune$finalModel, enet_tune$bestTune$lambda)
+plot(caret::varImp(enet_tune))
+```
+
+#Bayesian Linear modelling fitting
+
+```{r}
+baye <- model.matrix( response ~ (x07 + x09 + x10 + x11 + x21)^3, data = df_start, model = TRUE) 
+
+needed_info <- list(
+  yobs = df_start$response,
+  design_matrix = baye,
+  mu_beta = 0,
+  tau_beta = 1,
+  sigma_rate = 1
+)
+
+baye1 <- model.matrix( response ~ (x07 + x09 + x10 + x11 + x21)^2, data = df_start, model = TRUE) 
+
+needed_info1 <- list(
+  yobs = df_start$response,
+  design_matrix = baye1,
+  mu_beta = 0,
+  tau_beta = 1,
+  sigma_rate = 1
+)
+```
+
+```{r}
+#Defining the logPostFunction
+my1_logpost <- function(unknowns, my_info)
+{
+  # specify the number of unknown beta parameters
+  length_beta <- ncol(my_info$design_matrix)
+  
+  # extract the beta parameters from the `unknowns` vector
+  beta_v <- unknowns[1:length_beta ]
+  
+  # extract the unbounded noise parameter, varphi
+  lik_varphi <- unknowns[length_beta+1]
+  
+  # back-transform from varphi to sigma
+  lik_sigma <- exp(lik_varphi)
+  
+  # extract design matrix
+  X <- my_info$design_matrix
+  
+  # calculate the linear predictor
+  mu <- as.vector(X %*% as.matrix(beta_v))
+  
+  # evaluate the log-likelihood
+  log_lik <- sum(dnorm(x=my_info$yobs, mean = mu, sd=lik_sigma, log= TRUE))
+  
+  # evaluate the log-prior
+  log_prior_beta <- sum(dnorm(x=beta_v, mean =my_info$mu_beta, sd=my_info$tau_beta, log= TRUE))
+  
+  log_prior_sigma <- dexp(x=lik_sigma,rate = my_info$sigma_rate, log = TRUE)
+  
+  # add the mean trend prior and noise prior together
+  log_prior <- log_prior_beta + log_prior_sigma
+  
+  # account for the transformation
+  log_derive_adjust <- lik_varphi
+  
+  # sum together
+  log_lik + log_prior + log_derive_adjust
+}
+```
+
+```{r}
+#Executing the laplace approximation
+my_laplace <- function(start_guess, logpost_func, ...)
+{
+  # code adapted from the `LearnBayes`` function `laplace()`
+  fit <- optim(start_guess,
+               logpost_func,
+               gr = NULL,
+               ...,
+               method = "BFGS",
+               hessian = TRUE,
+               control = list(fnscale = -1, maxit = 1001))
+  
+  mode <- fit$par
+  post_var_matrix <- -solve(fit$hessian)
+  p <- length(mode)
+  int <- p/2 * log(2 * pi) + 0.5 * log(det(post_var_matrix)) + logpost_func(mode, ...)
+  # package all of the results into a list
+  list(mode = mode,
+       var_matrix = post_var_matrix,
+       log_evidence = int,
+       converge = ifelse(fit$convergence == 0,
+                         "YES", 
+                         "NO"),
+       iter_counts = as.numeric(fit$counts[1]))
+}
+```
+
+#Bayesian Fitting of FitLinearModel03
+
+```{r}
+set.seed(12)
+laplaceBaye7 <- my_laplace(rep(0, ncol(baye)+1), my1_logpost, needed_info)
+laplaceBaye7$converge
+laplaceBaye7$mode
+
+sqrt(diag(laplaceBaye7$var_matrix))
+```
+
+```{r}
+laplaceBaye7 %>% readr::write_rds("my_7Bsimple_model.rds")
+```
+
+#Bayesian Fitting of FitLinearModel02
+
+```{r}
+set.seed(12)
+laplaceBaye8 <- my_laplace(rep(0, ncol(baye1)+1), my1_logpost, needed_info1)
+laplaceBaye8$converge
+laplaceBaye8$mode
+
+sqrt(diag(laplaceBaye8$var_matrix))
+```
+
+
+```{r}
+laplaceBaye8 %>% readr::write_rds("my_8Bsimple_model.rds")
+```
+
+
+
+```{r}
+viz_post_coefs <- function(post_means, post_sds, xnames)
+{
+  tibble::tibble(
+    mu = post_means,
+    sd = post_sds,
+    x = xnames
+  ) %>% 
+    mutate(x = factor(x, levels = xnames)) %>% 
+    ggplot(mapping = aes(x = x)) +
+    geom_hline(yintercept = 0, color = 'grey', linetype = 'dashed') +
+    geom_point(mapping = aes(y = mu)) +
+    geom_linerange(mapping = aes(ymin = mu - 2 * sd,
+                                 ymax = mu + 2 * sd,
+                                 group = x)) +
+    labs(x = 'feature', y = 'coefficient value') +
+    coord_flip() +
+    theme_bw()
+}
+```
+
+```{r}
+viz_post_coefs(laplaceBaye7$mode[1 : length(laplaceBaye7$mode) - 1], sqrt(diag(laplaceBaye7$var_matrix))[1 : length(sqrt(diag(laplaceBaye7$var_matrix))) - 1], colnames(needed_info$design_matrix))
+```
+
+```{r}
+viz_post_coefs(laplaceBaye8$mode[1 : length(laplaceBaye8$mode) - 1], sqrt(diag(laplaceBaye8$var_matrix))[1 : length(sqrt(diag(laplaceBaye8$var_matrix))) - 1], colnames(needed_info1$design_matrix))
+```
+
+```{r}
+generate_lm_post_samples <- function(mvn_result, length_beta, num_samples)
+{
+  MASS::mvrnorm(n = num_samples,
+                mu = mvn_result$mode,
+                Sigma = mvn_result$var_matrix) %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    purrr::set_names(c(sprintf("beta_%02d", 0:(length_beta-1)), "varphi")) %>% 
+    mutate(sigma = exp(varphi))
+}
+```
+
+#Uncertainty observation in the posterior prediction of the residual error of the best two models is shown below:
+
+```{r}
+set.seed(12)
+post_samples_Baye7 <- generate_lm_post_samples(laplaceBaye7, ncol(baye), 2500)
+post_samples_Baye8 <- generate_lm_post_samples(laplaceBaye8, ncol(baye1), 2500)
+```
+
+
+```{r}
+post_samples_Baye7 %>% 
+  ggplot(mapping = aes(x = sigma)) +
+  geom_histogram(bins = 55) +
+  theme_bw()
+```
+
+```{r}
+post_samples_Baye8 %>% 
+  ggplot(mapping = aes(x = sigma)) +
+  geom_histogram(bins = 55) +
+  theme_bw()
+```
+
+#The posterior uncertainty prediction due to bayesian FitLinearModel03 ranges from about 0.13 to 0.18 (0.18-0.13 = 0.05) while the one due to FitLinearModel02 ranges
+#from 0.14 to 0.12 (0.14-0.12 = 0.02). These findings give credence to the above coefficient summary in the non-bayesian modelling.
+
+
+# Making Prediction for the top two Non-Bayesian linear models
+
+```{r}
+viz_grid <- expand.grid(x07 = seq(from = 0, to = 1, length.out=6),
+                        x09 = seq(from = 0, to = 1, length.out=50),
+                        x10 = seq(from = 0, to = 1, length.out=6),
+                        x11 = seq(from = 0, to = 1, length.out=6),
+                        x21 = seq(from = 0, to = 1, length.out=6),
+                        KEEP.OUT.ATTRS = FALSE,
+                        stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+viz_grid
+```
+
+```{r}
+tidy_predict <- function(mod, xnew)
+{
+  pred_df <- predict(mod, xnew, interval = "confidence") %>% 
+    as.data.frame() %>% tibble::as_tibble() %>% 
+    dplyr::select(pred = fit, ci_lwr = lwr, ci_upr = upr) %>% 
+    bind_cols(predict(mod, xnew, interval = 'prediction') %>% 
+                as.data.frame() %>% tibble::as_tibble() %>% 
+                dplyr::select(pred_lwr = lwr, pred_upr = upr))
+  
+  xnew %>% bind_cols(pred_df)
+}
+```
+
+
+
+```{r}
+pred_lm_02 <- tidy_predict(FitLinearModel02,viz_grid)
+
+pred_lm_03 <- tidy_predict(FitLinearModel03,viz_grid)
+```
+
+```{r}
+pred_lm_02 %>% 
+  ggplot(mapping = aes(x = x09)) +
+  geom_line(mapping = aes(y = pred))+
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr), fill = 'Orange')+
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr), fill = 'Grey') +
+  coord_cartesian(ylim = c(-7,7)) +
+  facet_wrap(facets = 'x11')
+```
+
+```{r}
+pred_lm_03 %>% 
+  ggplot(mapping = aes(x = x09)) +
+  geom_line(mapping = aes(y = pred))+
+  geom_ribbon(mapping = aes(ymin = pred_lwr, ymax = pred_upr), fill = 'Orange')+
+  geom_ribbon(mapping = aes(ymin = ci_lwr, ymax = ci_upr), fill = 'Grey') +
+  coord_cartesian(ylim = c(-7,7)) +
+  facet_wrap(facets = 'x11')
+```
+
+
+The predictive trends between the top 2 models above are different, as seen ealier in their coefficient summary, the confidence interval in the pred_lm_03,
+corresponding to the FitLinearModel03, is more wider to overwhelm the predictive interval. However, the pred_lm_02, corresponding to the FitLinearModel02, is easily
+seen and do not overwhelm the predictive interval, an indication of model consistency and certainty. The input values 1 correspond to minimizing the continuous output # and the confidence interval becomes unstable at this value of input.
+
+
+```{r}
+laplaceBaye7 <-  readr::read_rds("my_7Bsimple_model.rds")
+laplaceBaye8 <- readr::read_rds("my_8Bsimple_model.rds")
+```
+
+
+#PART C
+## Load packages
+
+This example uses the `tidyverse` suite of packages.  
+
+```{r}
+
+library(corrplot)
+library(caret)
+library(tidymodels)
+```
+
+## Large data
+
+After you have gone through fitting non-Bayesian and Bayesian linear models with the small simplified design, you will work with the larger more challenging data.  
+
+The large data are divided into three data sets because as part of the project you must consider two different sets of input features. You must train models to predict the responses as a function of the first input set, "the x-variables", then you must train models to predict the responses as a function of the second input set, "the v-variables". You will identify which input set produces models with better performance, or if the input set ultimately does not matter.  
+
+### Inputs: x-variables
+
+The first input set, "the x-variables" are loaded below.  
+
+```{r, read_x_variables}
+train_x <- readr::read_csv("train_input_set_x.csv", col_names = TRUE)
+```
+
+A glimpse of the "x-variable" training data are shown below. The first column `run_id` is **NOT** an input that you should consider. The `run_id` column is a unique identifier (a key) that uniquely defines each row in the data. There are 43 "x-variable" inputs with names `x01` through `x43`.  
+
+```{r, show_x_variables}
+train_x %>% glimpse()
+```
+
+### Inputs: v-variables
+
+The second input set, "the v-variables", are read in below.  
+
+```{r, read_v_variables}
+train_v <- readr::read_csv("train_input_set_v.csv", col_names = TRUE)
+```
+
+The glimpse shown below again reveals that the first column is the identifier `run_id`. There are 41 "v-variables" with names `v01` through `v41`.  
+
+```{r, show_v_variables}
+train_v %>% glimpse()
+```
+
+### Outputs
+
+The training outputs are read in for you below.  
+
+```{r, read_output_data}
+train_outputs <- readr::read_csv("train_outputs.csv", col_names = TRUE)
+```
+
+The `train_outputs` dataframe has 3 columns. The first column is again `run_id` the unique identifier per row. The second column, `response`, is the continuous output. The third column, `outcome`, is the discrete binary outcome. The glimpse of `train_outputs` is shown below.  
+
+```{r, show_train_outputs}
+train_outputs %>% glimpse()
+```
+
+## Compile data
+
+The unique identifier, `run_id`, is included in all three data sets associated with the complete or large problem. The data sets can be joined or merged to create the complete set of inputs and outputs as required.  
+
+### Regression problem
+
+The complete training set of all "x-variable" inputs and the continuous output are compiled below. After joining the data together, the `run_id` and `outcome` columns are removed to provide you a data set of just "x-variable" inputs and `response`. The glimpse of the joined data set, `ready_x_A` is provided below. The continuous output, `response`, is the last column in the data set.  
+
+```{r, make_train_set_x_A}
+ready_x_A <- train_x %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -outcome)
+
+ready_x_A %>% glimpse()
+```
+
+# Linear Regression models of the 43_x variable with continiuous output
+
+#Using the 7-fold cross validation with 3 repeats
+
+```{r}
+my_ctrl <- trainControl(method = "repeatedcv", number = 7, repeats = 3, search = 'random')
+
+my_metric <- "RMSE"
+```
+
+
+#Linear additive features
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_9 <- train(response ~ .,
+                  data = ready_x_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_9 %>% readr::write_rds("my_9simple_model.rds")
+fit_lm_9
+```
+
+
+#All pairwise interaction between the inputs
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_10 <- train(response ~ (.)^2,
+                  data = ready_x_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_10 %>% readr::write_rds("my_10simple_model.rds")
+fit_lm_10
+```
+
+
+#All 12 degree of freedom splines interaction between the inputs
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_11 <- train(response ~ splines::ns(x09 + x11,df=12) * (.),
+                  data = ready_x_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_11 %>% readr::write_rds("my_11simple_model.rds")
+fit_lm_11
+```
+
+
+#Regularized regression with elatic-net
+
+```{r,eval=FALSE}
+#All pairwise interaction between the inputs
+set.seed(12)
+fit_enet_12 <- train(response ~ (.)^2,
+                    data = ready_x_A,
+                    method = "glmnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl)
+
+fit_enet_12 %>% readr::write_rds("my_12simple_model.rds")
+fit_enet_12
+```
+
+
+```{r,eval=FALSE}
+#All cubic interaction between the inputs
+set.seed(12)
+fit_enet_13 <- train(response ~ (.)^3,
+                    data = ready_x_A,
+                    method = "glmnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl)
+
+fit_enet_13 %>% readr::write_rds("my_13simple_model.rds")
+fit_enet_13
+```
+
+
+#Neural network with Linear additive features
+```{r,eval=FALSE}
+set.seed(12)
+fit_nnet_14 <- train(response ~ .,
+                    data = ready_x_A,
+                    method = "nnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl,
+                    trace = FALSE,
+                    linout = TRUE)
+fit_nnet_14 %>% readr::write_rds("my_14simple_model.rds")
+fit_nnet_14
+```
+
+#Random Forest with Linear additive features
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_rf15 <- train(response ~ .,
+                data = ready_x_A,
+                method = "rf",
+                metric = my_metric,
+                trControl = my_ctrl,
+                importance = TRUE)
+
+fit_rf15 %>% readr::write_rds("my_15simple_model.rds")
+fit_rf15
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_xgb16 <- train(response ~ .,
+                 data = ready_x_A,
+                 method = "xgbTree",
+                 metric = my_metric,
+                 trControl = my_ctrl,
+                 objective = 'reg:squarederror')
+fit_xgb16 %>% readr::write_rds("my_16simple_model.rds")
+```
+
+
+
+#Gradient boosted tree
+
+```{r,eval=FALSE}
+xgb_grid <- expand.grid(nrounds = seq(100, 700, by = 100),
+                        max_depth = c(3, 4, 9),
+                        eta = c(0.5*fit_xgb16$bestTune$eta, fit_xgb16$bestTune$eta),
+                        gamma = fit_xgb16$bestTune$gamma,
+                        colsample_bytree = fit_xgb16$bestTune$colsample_bytree,
+                        min_child_weight = fit_xgb16$bestTune$min_child_weight,
+                        subsample = fit_xgb16$bestTune$subsample)
+
+set.seed(12)
+fit_xgb16T <- train(response ~ .,
+                 data = ready_x_A,
+                 method = "xgbTree",
+                 tuneGrid = xgb_grid,
+                 metric = my_metric,
+                 trControl = my_ctrl,
+                 objective = 'reg:squarederror')
+
+fit_xgb16T %>% readr::write_rds("my_16Tsimple_model.rds")
+fit_xgb16T$bestTune
+```
+
+
+```{r,eval=FALSE}
+fit_xgb16T$bestTune
+```
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_svm17 <- train(response ~ (.)^2,
+                 data = ready_x_A,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl)
+
+fit_svm17 %>% readr::write_rds("my_17simple_model.rds")
+fit_svm17
+```
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_pca_nnet18 <- train(response ~ .,
+                      data = ready_x_A,
+                      method = "pcaNNet",
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl,
+                      trace = FALSE,
+                      linout = TRUE)
+fit_pca_nnet18 %>% readr::write_rds("my_18simple_model.rds")
+fit_pca_nnet18
+```
+
+
+#Loading of the model
+
+```{r}
+fit_lm_9 <-  readr::read_rds("my_9simple_model.rds")
+fit_lm_10 <- readr::read_rds("my_10simple_model.rds")
+fit_lm_11 <- readr::read_rds("my_11simple_model.rds")
+fit_enet_12 <- readr::read_rds("my_12simple_model.rds")
+fit_enet_13 <- readr::read_rds("my_13simple_model.rds")
+fit_nnet_14 <- readr::read_rds("my_14simple_model.rds")
+fit_rf15 <- readr::read_rds("my_15simple_model.rds")
+fit_xgb16 <- readr::read_rds("my_16simple_model.rds")
+fit_xgb16T <- readr::read_rds("my_16Tsimple_model.rds")
+fit_svm17 <- readr::read_rds("my_17simple_model.rds")
+fit_pca_nnet18 <- readr::read_rds("my_18simple_model.rds")
+```
+`
+
+
+
+# Compilling Resampling result
+
+```{r}
+my_resultsXRegression <- resamples(list(LM_9 = fit_lm_9,
+                             LM_10 = fit_lm_10,
+                             SPLINE_11 = fit_lm_11,
+                             ENET_12 = fit_enet_12,
+                             ENET_13 = fit_enet_13,
+                             NNET14 = fit_nnet_14,
+                             RF15 = fit_rf15,
+                             XGB16 = fit_xgb16,
+                             XGB16T = fit_xgb16T,
+                             SVM17 = fit_svm17,
+                             PCA_NNET18 = fit_pca_nnet18))
+```
+
+
+
+```{r}
+dotplot(my_resultsXRegression)
+```
+
+# NNET24 is the best model from the above candidate models for X inputs/variables in the regression problem
+
+
+
+
+```{r}
+dotplot(my_resultsXRegression, metric = "RMSE")
+```
+
+
+```{r}
+dotplot(my_resultsXRegression, metric = "Rsquared")
+```
+
+
+```{r}
+plot(varImp(fit_nnet_14))
+```
+
+```{r}
+varImp(fit_nnet_14, scale = FALSE)
+```
+
+```{r}
+plot(fit_nnet_14, top = 20)
+```
+
+```{r}
+splom(my_resultsXRegression)
+```
+
+```{r}
+densityplot(my_resultsXRegression)
+```
+
+```{r}
+bwplot(my_resultsXRegression, layout = c(3, 1))
+```
+
+## Variables x09,x11,x10 among others are the most important X variables in predicting the regression outcomes.
+
+
+
+
+
+
+# Using the resampling approach for training the model, only the neutral network (fit_nnet_14) produce the best result as it has about Rsquared value of 0.95 and RMSE of 0.17 among the other models
+
+
+
+# Visualization prediction of the best model
+
+```{r}
+
+#Function to make prediction
+make_variable_sequence <- function(xname, xvalues, primary_vars, secondary_vars)
+{
+  if( xname %in% primary_vars ){
+    xrange <- range(xvalues)
+    xvec <- seq(xrange[1], xrange[2], length.out = 51)
+  } else if ( xname %in% secondary_vars ) {
+    xrange <- range(xvalues)
+    xvec <- seq(xrange[1], xrange[2], length.out = 5)
+  } else {
+    xvec <- median(xvalues)
+  }
+  
+  xvec
+}
+
+make_viz_grid_list <- function(primary_vars, secondary_vars, training_inputs)
+{
+  all_names <- training_inputs %>% names()
+  
+  xlist <- purrr::map2(all_names,
+                       training_inputs,
+                       make_variable_sequence,
+                       primary_vars = primary_vars,
+                       secondary_vars = secondary_vars)
+  
+  names(xlist) <- all_names
+  
+  xlist
+}
+
+```
+
+
+```{r}
+viz_grid_list <- make_viz_grid_list(primary_vars = c("x11", "x09"),
+                                    secondary_vars = c("x10", "x21"),
+                                    training_inputs = ready_x_A )
+
+viz_grid_list %>% length()
+```
+
+
+```{r}
+viz_grid_xvariable <- expand.grid(viz_grid_list,
+                           KEEP.OUT.ATTRS = FALSE,
+                           stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+
+viz_grid_xvariable %>% glimpse()
+```
+
+
+
+
+# Prediction visualization trends of the X-variables with continuous output (response) based on the best model (Neural network, fit_nnet_14)
+
+```{r}
+viz_grid_xvariable %>% 
+  mutate(pred = predict(fit_nnet_14, newdata = viz_grid_xvariable)) %>% 
+  ggplot(mapping = aes(x = x09, y = response)) +
+  geom_point(alpha = 0.3, size = 1.85,
+             mapping = aes(color = x10)) +
+  geom_line(mapping = aes(y = pred,
+                          group = interaction(x21,
+                                              x07,
+                                              x10),
+                          color = x10),
+            size = 1.) +
+  facet_grid(x07 ~ x21, labeller = "label_both") +
+  scale_color_viridis_c(option = 'plasma') +
+  theme_bw()
+```
+# Prediction based on PCA_NNET, second best model of the x-variables
+
+```{r}
+viz_grid_xvariable %>% 
+  mutate(pred = predict(fit_pca_nnet18, newdata = viz_grid_xvariable)) %>% 
+  ggplot(mapping = aes(x = x09, y = response)) +
+  geom_point(alpha = 0.3, size = 1.85,
+             mapping = aes(color = x10)) +
+  geom_line(mapping = aes(y = pred,
+                          group = interaction(x21,
+                                              x07,
+                                              x09),
+                          color = x09),
+            size = 1.) +
+  facet_grid(x07 ~ x21, labeller = "label_both") +
+  scale_color_viridis_c(option = 'plasma') +
+  theme_bw()
+```
+
+
+# Linear Regression models of the 41_v variable with continiuous output
+
+The complete training set of all "v-variable" inputs and the continuous response is created below. The steps are the same as those used to create the complete "x-variable" training set. The finalized ready training set is named `ready_v_A` and is shown as a glimpse below.  
+
+```{r, make_train_set_v_A}
+ready_v_A <- train_v %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -outcome)
+
+ready_v_A %>% glimpse()
+```
+
+
+#Linear additive features
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_19 <- train(response ~ .,
+                  data = ready_v_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_19 %>% readr::write_rds("my_19simple_model.rds")
+fit_lm_19
+```
+
+
+#All pairwise interaction between the inputs
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_20 <- train(response ~ (.)^2,
+                  data = ready_v_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_20 %>% readr::write_rds("my_20simple_model.rds")
+fit_lm_20
+```
+
+
+#All cubic interaction between the inputs
+```{r,eval=FALSE}
+set.seed(12)
+fit_lm_21 <- train(response ~ splines::ns(v09 + v11,df=12) * (.),
+                  data = ready_v_A,
+                  method = "lm",
+                  metric = my_metric,
+                  minimize = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = my_ctrl)
+
+fit_lm_21 %>% readr::write_rds("my_21simple_model.rds")
+fit_lm_21
+```
+
+
+#Regularized regression with elatic-net
+
+```{r,eval=FALSE}
+#All pairwise interaction between the inputs
+set.seed(12)
+fit_enet_22 <- train(response ~ (.)^2,
+                    data = ready_v_A,
+                    method = "glmnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl)
+
+fit_enet_22 %>% readr::write_rds("my_22simple_model.rds")
+fit_enet_22
+```
+
+
+```{r,eval=FALSE}
+#All cubic interaction between the inputs
+set.seed(12)
+fit_enet_23 <- train(response ~ (.)^3,
+                    data = ready_v_A,
+                    method = "glmnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl)
+
+fit_enet_23 %>% readr::write_rds("my_23simple_model.rds")
+fit_enet_23
+```
+
+
+#Neural network with Linear additive features
+```{r}
+set.seed(12)
+nnet_grid <- expand.grid(size = c(2, 4, 6, 8, 10, 12),
+                         decay = exp(seq(-6, 2, length.out = 13)))
+fit_nnet_24 <- train(response ~ .,
+                    data = ready_v_A,
+                    method = "nnet",
+                    metric = my_metric,
+                    tuneGrid = nnet_grid,
+                    preProcess = c("center", "scale"),
+                    trControl = my_ctrl,
+                    trace = FALSE,
+                    linout = TRUE)
+fit_nnet_24 %>% readr::write_rds("my_24simple_model.rds")
+fit_nnet_24
+```
+
+#Random Forest with Linear additive features
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_rf25 <- train(response ~ .,
+                data = ready_v_A,
+                method = "rf",
+                metric = my_metric,
+                trControl = my_ctrl,
+                importance = TRUE)
+
+fit_rf25 %>% readr::write_rds("my_25simple_model.rds")
+fit_rf25
+```
+
+
+
+
+#Gradient boosted tree
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_xgb26 <- train(response ~ .,
+                 data = ready_v_A,
+                 method = "xgbTree",
+                 metric = my_metric,
+                 trControl = my_ctrl,
+                 objective = 'reg:squarederror')
+
+fit_xgb26 %>% readr::write_rds("my_26simple_model.rds")
+fit_xgb26$bestTune
+```
+
+```{r,eval=FALSE}
+xgb_grid <- expand.grid(nrounds = seq(100, 700, by = 100),
+                        max_depth = c(3, 4, 9),
+                        eta = c(0.5*fit_xgb26$bestTune$eta, fit_xgb26$bestTune$eta),
+                        gamma = fit_xgb26$bestTune$gamma,
+                        colsample_bytree = fit_xgb26$bestTune$colsample_bytree,
+                        min_child_weight = fit_xgb26$bestTune$min_child_weight,
+                        subsample = fit_xgb26$bestTune$subsample)
+
+set.seed(12)
+fit_xgb26T <- train(response ~ .,
+                 data = ready_v_A,
+                 method = "xgbTree",
+                 tuneGrid = xgb_grid,
+                 metric = my_metric,
+                 trControl = my_ctrl,
+                 objective = 'reg:squarederror')
+
+fit_xgb26T %>% readr::write_rds("my_26Tsimple_model.rds")
+fit_xgb26T$bestTune
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_svm27 <- train(response ~ .,
+                 data = ready_v_A,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 preProcess = c("center", "scale"),
+                 trControl = my_ctrl)
+
+fit_svm27 %>% readr::write_rds("my_27simple_model.rds")
+fit_svm27
+```
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_pca_nnet28 <- train(response ~ .,
+                      data = ready_v_A,
+                      method = "pcaNNet",
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = my_ctrl,
+                      trace = FALSE,
+                      linout = TRUE)
+fit_pca_nnet28 %>% readr::write_rds("my_28simple_model.rds")
+fit_pca_nnet28
+```
+
+
+```{r}
+fit_lm_19 <-  readr::read_rds("my_19simple_model.rds")
+fit_lm_20 <- readr::read_rds("my_20simple_model.rds")
+fit_lm_21 <- readr::read_rds("my_21simple_model.rds")
+fit_enet_22 <- readr::read_rds("my_22simple_model.rds")
+fit_enet_23 <- readr::read_rds("my_23simple_model.rds")
+fit_nnet_24 <- readr::read_rds("my_24simple_model.rds")
+fit_rf25 <- readr::read_rds("my_25simple_model.rds")
+fit_xgb26 <- readr::read_rds("my_26simple_model.rds")
+fit_xgb26T <- readr::read_rds("my_26Tsimple_model.rds")
+fit_svm27 <- readr::read_rds("my_27simple_model.rds")
+fit_pca_nnet28 <- readr::read_rds("my_28simple_model.rds")
+```
+
+
+
+```{r}
+my_resultsVRegression <- resamples(list(LM_19 = fit_lm_19,
+                             LM_20 = fit_lm_20,
+                             SPLINE_21 = fit_lm_21,
+                             ENET_22 = fit_enet_22,
+                             ENET_23 = fit_enet_23,
+                             NNET24 = fit_nnet_24,
+                             RF25 = fit_rf25,
+                             XGB26 = fit_xgb26,
+                             XGB26T = fit_xgb26T,
+                             SVM27 = fit_svm27,
+                             PCA_NNET28 = fit_pca_nnet28))
+```
+
+
+```{r}
+dotplot(my_resultsVRegression)
+```
+
+# NNET24 is the best model from the above candidate models for V inputs/variables in the regression problem
+
+
+
+```{r}
+dotplot(my_resultsVRegression, metric = "RMSE")
+```
+
+
+```{r}
+dotplot(my_resultsVRegression, metric = "Rsquared")
+```
+
+```{r}
+plot(varImp(fit_nnet_24))
+```
+
+```{r}
+varImp(fit_nnet_24, scale = FALSE)
+```
+
+```{r}
+plot(fit_nnet_24, top = 20)
+```
+
+```{r}
+splom(my_resultsVRegression)
+```
+
+```{r}
+densityplot(my_resultsVRegression)
+```
+
+```{r}
+bwplot(my_resultsVRegression, layout = c(3, 1))
+```
+
+
+## Variables v04,vo6,v12 among others are the most important V variables in predicting the regression outcomes
+
+
+
+
+# Prediction visualization trends of the V-variables with continious output (response) based on the best model (Neural network, fit_nnet_24)
+
+
+```{r}
+viz_grid_list1 <- make_viz_grid_list(primary_vars = c("v04", "v07"),
+                                    secondary_vars = c("v02", "v35"),
+                                    training_inputs = ready_v_A)
+
+viz_grid_list1 %>% length()
+```
+
+```{r}
+viz_grid_Vvariable <- expand.grid(viz_grid_list1,
+                           KEEP.OUT.ATTRS = FALSE,
+                           stringsAsFactors = FALSE) %>% 
+  as.data.frame() %>% tibble::as_tibble()
+
+viz_grid_Vvariable %>% glimpse()
+```
+
+
+
+
+
+```{r}
+viz_grid_Vvariable %>% 
+  mutate(pred = predict(fit_nnet_24, newdata = viz_grid_Vvariable)) %>% 
+  ggplot(mapping = aes(x = v04, y = response)) +
+  geom_point(alpha = 0.3, size = 1.85,
+             mapping = aes(color = v02)) +
+  geom_line(mapping = aes(y = pred,
+                          group = interaction(v35,
+                                              v12,
+                                              v02),
+                          color = v02),
+            size = 1.) +
+  facet_grid(v34 ~ v35, labeller = "label_both") +
+  scale_color_viridis_c(option = 'plasma') +
+  theme_bw()
+```
+
+
+# Prediction based on PCA_NNET, second best model of the v-variables
+
+```{r}
+viz_grid_Vvariable %>% 
+  mutate(pred = predict(fit_pca_nnet28, newdata = viz_grid_Vvariable)) %>% 
+  ggplot(mapping = aes(x = v04, y = response)) +
+  geom_point(alpha = 0.3, size = 1.85,
+             mapping = aes(color = v02)) +
+  geom_line(mapping = aes(y = pred,
+                          group = interaction(v35,
+                                              v12,
+                                              v02),
+                          color = v02),
+            size = 1.) +
+  facet_grid(v34 ~ v35, labeller = "label_both") +
+  scale_color_viridis_c(option = 'plasma') +
+  theme_bw()
+```
+
+# The best model for both X and V variable is Neural network in both cases based on MAE, Rsquared and RMSE metric value, corresponding to fit_nnet_14 and fit_nnet_24 respectively using 7 folds with 3 repeats and random search training control. This model after training, tuning with resampling achieve 0.99 R-squared metric and 0.12 on hold-out test set.
+
+
+#PART D, CLASSIFICATION PROBLEM
+
+## Load packages
+
+This example uses the `tidyverse` suite of packages.  
+
+```{r}
+
+library(corrplot)
+library(caret)
+library(yardstick)
+library(ggridges)
+library(tidymodels)
+library(RSNNS)
+library(factoextra)
+```
+
+
+
+```{r}
+train_x <- readr::read_csv("train_input_set_x.csv", col_names = TRUE)
+train_v <- readr::read_csv("train_input_set_v.csv", col_names = TRUE)
+train_outputs <- readr::read_csv("train_outputs.csv", col_names = TRUE)
+```
+
+
+# CLASSIFICATION PROBLEM
+
+The classification training data set for the "x-variables" is created below. The continuous output, `response`, is now dropped while the categorical variable `outcome` is retained with the "x-variable" inputs. The `outcome` variable is converted to a factor data type for you so that way all students will work with the same level (unique category) ordering. The classification training set for the "x-variables" is named `ready_x_B` and is shown via a glimpse below.  
+
+```{r}
+ready_x_B <- train_x %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -response) %>% 
+  mutate(outcome = factor(outcome, levels = c("event", "non_event")))
+
+ready_x_B %>% glimpse()
+```
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = outcome)) +
+  geom_bar() +
+  geom_text(stat = 'count',
+            mapping = aes(label = stat(count)),
+            color = 'red',
+            nudge_y = 7,
+            size = 5.5) +
+  theme_bw()
+```
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = outcome)) +
+  geom_bar(mapping = aes(y = stat(prop),
+                         group = 1)) +
+  geom_text(stat = 'count',
+            mapping = aes(y = after_stat( count / sum(count) ),
+                          label = after_stat( signif(count / sum(count), 3) )),
+            color = 'red', nudge_y = 0.0275, size = 5.5) +
+  theme_bw()
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_histogram(bins = 27) +
+  facet_wrap(~ input_id, scales = "free_y") +
+  theme_bw() +
+  theme(axis.text.y = element_blank(),
+        strip.text = element_text(size = 6.5))
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = input_id), color = 'red') +
+  theme_bw()
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.25) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+
+The value above appear to concentrate around 0.5 with few exception of input variables and the class-label appear to be even accross input variable.
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_boxplot(mapping = aes(group = interaction(input_id, outcome),
+                             fill = outcome,
+                             color = outcome),
+               alpha = 0.1) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome),
+               position = position_dodge(0.75)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = as.factor(input_id), y = value)) +
+  stat_summary(fun.data = 'mean_se',
+               fun.args = list(mult = 2),
+               mapping = aes(group = interaction(input_id, outcome),
+                             color = outcome)) +
+  ggthemes::scale_color_colorblind() +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(legend.position = "top")
+```
+
+The proportion of the event and non-event at each input variables
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = input_id), fill = 'grey') +
+  theme_bw()
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = input_id), fill = 'grey') +
+  facet_wrap(~input_bin, scales = "free_x") +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+The distribution looks uniforms for the majority of input variables with 18 to 23 inputs values concentrated at 1 value.
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = interaction(input_id, outcome),
+                            fill = outcome),
+              alpha = 0.55) +
+  facet_wrap(~input_bin, scales = "free_x") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank(),
+        legend.position = "top")
+```
+Beginning from number id 33 to 43 input variables, the class contribution appear to be similar by focusing on the top-right facet from above.
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  filter(input_id < 23 & input_id > 11) %>% 
+  ggplot(mapping = aes(x = input_id, y = value)) +
+  geom_violin(mapping = aes(group = interaction(input_id, outcome),
+                            fill = outcome),
+              alpha = 0.55) +
+  facet_wrap(~input_bin, scales = "free_x") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank(),
+        legend.position = "top")
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges() +
+  facet_wrap(~input_bin, scales = "free_y") +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+Input variables 18 to 23 number id appear to be left-skewed distribution
+
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges(mapping = aes(fill = outcome),
+                      alpha = 0.5) +
+  facet_wrap(~input_bin, scales = "free_y") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+```{r}
+ready_x_B %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid", "outcome")) %>% 
+  mutate(input_id = as.integer( stringr::str_extract(name, "\\d+") )) %>% 
+  mutate(input_bin = cut(input_id,
+                         breaks = quantile(input_id),
+                         include.lowest = TRUE)) %>% 
+  filter(input_id < 23 & input_id > 11) %>% 
+  ggplot(mapping = aes(x = value, y = as.factor(input_id))) +
+  geom_density_ridges(mapping = aes(fill = outcome),
+                      alpha = 0.5) +
+  facet_wrap(~input_bin, scales = "free_y") +
+  ggthemes::scale_fill_colorblind() +
+  theme_bw() +
+  theme(strip.text = element_blank())
+```
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = x12, y = x13)) +
+  geom_point(alpha = 0.25, size = 3) +
+  coord_equal() +
+  theme_bw()
+```
+
+```{r}
+ready_x_B %>% 
+  ggplot(mapping = aes(x = x12, y = x13)) +
+  geom_point(alpha = 0.25, size = 3,
+             mapping = aes(color = outcome)) +
+  coord_equal() +
+  ggthemes::scale_color_colorblind() +
+  theme_bw() +
+  guides(color = guide_legend(override.aes = list(alpha = 1.0)))
+```
+
+The two input variables appear to be no correlation as the outcome color coding looks random. For clarification, let's check the correlation plot below.
+
+
+```{r}
+ready_x_B %>% 
+  select(-outcome) %>% 
+  cor() %>% 
+  corrplot::corrplot(method = 'square', type = 'upper') 
+
+ready_x_B %>% 
+  select(-outcome) %>% 
+  cor() %>% 
+  corrplot::corrplot(method = 'square', type = 'upper',
+                     order = 'hclust', hclust.method = 'ward.D2')
+```
+
+```{r}
+ready_x_B %>% 
+  group_by(outcome) %>% 
+  tidyr::nest() %>% 
+  mutate(cor_wf = map(data, corrr::correlate, quiet = TRUE, diagonal = 1),
+         cor_lf = map(cor_wf, corrr::stretch)) %>% 
+  select(outcome, cor_lf) %>% 
+  tidyr::unnest(cor_lf) %>% 
+  ungroup() %>% 
+  mutate(x_id = stringr::str_extract(x, '\\d+'),
+         y_id = stringr::str_extract(y, '\\d+')) %>% 
+  mutate(x_id = as.integer(x_id),
+         y_id = as.integer(y_id)) %>% 
+  ggplot(mapping = aes(x = as.factor(x_id), y = as.factor(y_id))) +
+  geom_tile(mapping = aes(fill = r), color = 'white') +
+  coord_equal() +
+  facet_wrap(~outcome, labeller = "label_both") +
+  scale_fill_gradient2('corr',
+                       low = 'red', mid='white', high='blue',
+                       midpoint = 0,
+                       limits = c(-1, 1)) +
+  labs(x='', y = '') +
+  theme_bw() +
+  theme(legend.position = "top",
+        axis.text = element_text(size = 5.5))
+```
+
+## Classifaction model of X-variable
+
+```{r,eval=FALSE}
+set.seed(12)
+cv_folds <-  trainControl(method = "repeatedcv", number = 3, repeats = 9, classProbs = TRUE, summaryFunction = twoClassSummary, search = 'random')
+
+my_metric <- "ROC"
+gbmGrid <- expand.grid(interaction.depth = c(1,5,9),
+                       n.trees = (1:30)*50,
+                       shrinkage = 0.1,
+                       n.minobsinnode = 20)
+nrow(gbmGrid)
+```
+
+
+```{r,eval=FALSE}
+#Linear additive interaction features with logistic regression
+set.seed(12)
+FitLinearModel29 <- caret::train(outcome ~ .,
+                  data = ready_x_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel29 %>% readr::write_rds("my_29simple_model.rds")
+```
+
+
+```{r,eval=FALSE}
+#All pair-wise interaction features with logistic regression
+set.seed(12)
+FitLinearModel30 <- train(outcome ~ (.)^2,
+                  data = ready_x_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel30 %>% readr::write_rds("my_30simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All 12 degree of freedom splines interaction between the inputs
+set.seed(12)
+FitLinearModel31 <- train(outcome ~ splines::ns(x09 + x11,df=12) * (.),
+                  data = ready_x_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel31 %>% readr::write_rds("my_31simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All pair-wise interaction features of regularized logistic regression with Elastic net
+set.seed(12)
+fit_enet_32 <- train(outcome ~ (.)^2,
+                  data = ready_x_B,
+                  method = "glmnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+fit_enet_32 %>% readr::write_rds("my_32simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All cubic interaction features of regularized logistic regression with Elastic net
+set.seed(12)
+fit_enet_33 <- train(outcome ~ (.)^3,
+                  data = ready_x_B,
+                  method = "glmnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+fit_enet_33 %>% readr::write_rds("my_33simple_model.rds")
+```
+
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_rf34 <- caret::train(outcome ~ .,
+                    data = ready_x_B,
+                    method = "rf",
+                    metric = my_metric,
+                    
+                    preProcess = c("center", "scale"),
+                    trControl = cv_folds)
+fit_rf34 %>% readr::write_rds("my_34simple_model.rds")
+fit_rf34
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_svm35 <- caret::train(outcome ~ .,
+                 data = ready_x_B,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 preProcess = c("center", "scale"),
+                 trControl = cv_folds)
+fit_svm35 %>% readr::write_rds("my_35simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_nnet_36 <- caret::train(outcome ~ .,
+                    data = ready_x_B,
+                    method = "nnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = cv_folds,
+                    trace = FALSE,
+                    linout = FALSE)
+fit_nnet_36 %>% readr::write_rds("my_36simple_model.rds")
+fit_nnet_36
+```
+
+
+
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_xgb37 <- caret::train(outcome ~ .,
+                 data = ready_x_B,
+                 method = "xgbTree",
+                 metric = my_metric,
+                 trControl = cv_folds,
+                 objective = "reg:logistic")
+fit_xgb37 %>% readr::write_rds("my_37simple_model.rds")
+```
+
+
+
+
+```{r,eval=FALSE}
+#Bonus Points
+xgb_grid <- expand.grid(nrounds = seq(100, 700, by = 100),
+                        max_depth = c(3, 4, 9),
+                        eta = c(0.5*fit_xgb37$bestTune$eta, fit_xgb37$bestTune$eta),
+                        gamma = fit_xgb37$bestTune$gamma,
+                        colsample_bytree = fit_xgb37$bestTune$colsample_bytree,
+                        min_child_weight = fit_xgb37$bestTune$min_child_weight,
+                        subsample = fit_xgb37$bestTune$subsample)
+
+fit_xgb37T <- caret::train(outcome ~ .,
+                 data = ready_x_B,
+                 method = "xgbTree",
+                 tuneGrid = xgb_grid,
+                 metric = my_metric,
+                 trControl = cv_folds,
+                 objective = "reg:logistic")
+
+fit_xgb37T %>% readr::write_rds("my_37Tsimple_model.rds")
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_pca_nnet38 <- caret::train(outcome ~ .,
+                      data = ready_x_B,
+                      method = "pcaNNet",
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = cv_folds,
+                      trace = FALSE,
+                      linout = FALSE)
+fit_pca_nnet38 %>% readr::write_rds("my_38simple_model.rds")
+fit_pca_nnet38
+```
+
+
+
+
+#Loading of the model
+
+```{r}
+FitLinearModel29 <- readr::read_rds("my_29simple_model.rds")
+FitLinearModel30 <- readr::read_rds("my_30simple_model.rds")
+FitLinearModel31 <- readr::read_rds("my_31simple_model.rds")
+fit_enet_32 <- readr::read_rds("my_32simple_model.rds")
+fit_enet_33 <- readr::read_rds("my_33simple_model.rds")
+fit_rf34 <- readr::read_rds("my_34simple_model.rds")
+fit_svm35 <- readr::read_rds("my_35simple_model.rds")
+fit_nnet_36 <- readr::read_rds("my_36simple_model.rds")
+fit_xgb37 <- readr::read_rds("my_37simple_model.rds")
+fit_xgb37T <- readr::read_rds("my_37Tsimple_model.rds")
+fit_pca_nnet38 <- readr::read_rds("my_38simple_model.rds")
+```
+
+
+```{r}
+my_resultsXClassification<-resamples(list(LM_29 = FitLinearModel29,
+                             LM_30 = FitLinearModel30,
+                             SPLINE_31 = FitLinearModel31,
+                             ENET_32 = fit_enet_32,
+                             ENET_33 = fit_enet_33,
+                             RF34 = fit_rf34,
+                             SVM35 = fit_svm35,
+                             NNET_36 =  fit_nnet_36,
+                             XGB37 = fit_xgb37,
+                             XGB37T = fit_xgb37T,
+                             PCA_NNET38 = fit_pca_nnet38))
+```
+
+
+
+```{r}
+dotplot(my_resultsXClassification)
+```
+
+```{r}
+varImp(fit_xgb37T, scale = FALSE)
+```
+
+
+# The 5 inputs variable that minimize the categorical responseX are x09, x11, x05, x38 and x39 respectively.
+
+
+```{r}
+plot(fit_xgb37T, top = 20)
+```
+
+```{r}
+splom(my_resultsXClassification)
+```
+
+```{r}
+densityplot(my_resultsXClassification)
+```
+
+```{r}
+bwplot(my_resultsXClassification, layout = c(3, 1))
+```
+
+# Tuning XGBOOST model, fit_xgb37T, XGB37T, is the best model from the above candidate models for X inputs/variables in the regression problem
+
+
+
+# Visualization prediction of Xclassification on outcome for the best model
+
+```{r}
+Explain_VariablesX <- lime::lime(ready_x_B, fit_xgb37T, n_bins = 5)
+```
+
+
+
+Explanation of all Input features using the first 50 observations for the event
+
+```{r}
+ X_VariablesExplain <- lime::explain(
+  x = ready_x_B[50,], 
+  explainer = Explain_VariablesX, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 43, 
+  feature_select = "highest_weights",
+  labels = "event"
+  )
+```
+
+
+
+
+```{r}
+lime::plot_features(X_VariablesExplain)
+```
+
+```{r}
+lime::plot_explanations(X_VariablesExplain)
+```
+
+
+Predictive Visualization and Explanation of all XInput features using the first 50 observations for the non-event
+
+
+```{r}
+X_VariablesExplain_NonEvent <- lime::explain(
+  x = ready_x_B[50,], 
+  explainer = Explain_VariablesX, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 43, 
+  feature_select = "highest_weights",
+  labels = "non_event"
+  )
+```
+
+
+
+```{r}
+lime::plot_features(X_VariablesExplain_NonEvent)
+```
+
+```{r}
+lime::plot_explanations(X_VariablesExplain_NonEvent)
+```
+
+Lastly, the classification data set associated with the "v-variables" is created below. The data set is named `ready_v_B` and a glimpse is shown, which again shows that the output is the last column in the data set. The model building and prediction visualization is also done for the best tune model, Xgboost as seen from the classification metrics among the candidate models. 
+
+```{r}
+ready_v_B <- train_v %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -response) %>% 
+  mutate(outcome = factor(outcome, levels = c("event", "non_event")))
+
+ready_v_B %>% glimpse()
+```
+
+# V-varibles
+
+
+## Classifaction model of V-variables
+
+```{r}
+set.seed(12)
+library(caret)
+cv_folds <-  trainControl(method = "repeatedcv", number = 3, repeats = 9, classProbs = TRUE, summaryFunction = twoClassSummary, search = 'random')
+
+my_metric <- "ROC"
+gbmGrid <- expand.grid(interaction.depth = c(1,5,9),
+                       n.trees = (1:30)*50,
+                       shrinkage = 0.1,
+                       n.minobsinnode = 20)
+nrow(gbmGrid)
+```
+
+
+```{r,eval=FALSE}
+#Linear additive interaction features with logistic regression
+set.seed(12)
+FitLinearModel39 <- caret::train(outcome ~ .,
+                  data = ready_v_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel39 %>% readr::write_rds("my_39simple_model.rds")
+```
+
+
+```{r,eval=FALSE}
+#All pair-wise interaction features with logistic regression
+set.seed(12)
+FitLinearModel40 <- caret::train(outcome ~ (.)^2,
+                  data = ready_v_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel40 %>% readr::write_rds("my_40simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All 12 degree of freedom splines interaction between the inputs
+set.seed(12)
+FitLinearModel41 <- caret::train(outcome ~ splines::ns(v04 + v06,df=12) * (.),
+                  data = ready_v_B,
+                  method = "LogitBoost",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+FitLinearModel41 %>% readr::write_rds("my_41simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All pair-wise interaction features of regularized logistic regression with Elastic net
+set.seed(12)
+fit_enet_42 <- caret::train(outcome ~ (.)^2,
+                  data = ready_v_B,
+                  method = "glmnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+fit_enet_42 %>% readr::write_rds("my_42simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+#All cubic interaction features of regularized logistic regression with Elastic net
+set.seed(12)
+fit_enet_43 <- caret::train(outcome ~ (.)^3,
+                  data = ready_v_B,
+                  method = "glmnet",
+                  metric = my_metric,
+                  preProcess = c("center", "scale"),
+                  trControl = cv_folds)
+
+fit_enet_43 %>% readr::write_rds("my_43simple_model.rds")
+```
+
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_rf44 <- caret::train(outcome ~ .,
+                    data = ready_v_B,
+                    method = "rf",
+                    metric = my_metric,
+                    
+                    preProcess = c("center", "scale"),
+                    trControl = cv_folds)
+fit_rf44 %>% readr::write_rds("my_44simple_model.rds")
+fit_rf44
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_svm45 <- caret::train(outcome ~ .,
+                 data = ready_v_B,
+                 method = "svmRadial",
+                 metric = my_metric,
+                 preProcess = c("center", "scale"),
+                 trControl = cv_folds)
+fit_svm45 %>% readr::write_rds("my_45simple_model.rds")
+```
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_nnet_46 <- caret::train(outcome ~ .,
+                    data = ready_v_B,
+                    method = "nnet",
+                    metric = my_metric,
+                    preProcess = c("center", "scale"),
+                    trControl = cv_folds,
+                    trace = FALSE,
+                    linout = FALSE)
+fit_nnet_46 %>% readr::write_rds("my_46simple_model.rds")
+fit_nnet_46
+```
+
+
+
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_xgb47 <- caret::train(outcome ~ .,
+                 data = ready_v_B,
+                 method = "xgbTree",
+                 metric = my_metric,
+                 trControl = cv_folds,
+                 objective = "reg:logistic")
+fit_xgb47 %>% readr::write_rds("my_47simple_model.rds")
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+#Bonus Points
+xgb_grid <- expand.grid(nrounds = seq(100, 800, by = 100),
+                        max_depth = c(3,9,12),
+                        eta = c(0.5*fit_xgb47$bestTune$eta, fit_xgb47$bestTune$eta),
+                        gamma = fit_xgb47$bestTune$gamma,
+                        colsample_bytree = fit_xgb47$bestTune$colsample_bytree,
+                        min_child_weight = fit_xgb47$bestTune$min_child_weight,
+                        subsample = fit_xgb47$bestTune$subsample)
+
+fit_xgb47T <- caret::train(outcome ~ .,
+                 data = ready_v_B,
+                 method = "xgbTree",
+                 tuneGrid = xgb_grid,
+                 metric = my_metric,
+                 trControl = cv_folds,
+                 objective = "reg:logistic")
+
+fit_xgb47T %>% readr::write_rds("my_47Tsimple_model.rds")
+```
+
+
+
+
+```{r,eval=FALSE}
+set.seed(12)
+fit_pca_nnet48 <- caret::train(outcome ~ .,
+                      data = ready_v_B,
+                      method = "pcaNNet",
+                      metric = my_metric,
+                      preProcess = c("center", "scale"),
+                      trControl = cv_folds,
+                      trace = FALSE,
+                      linout = FALSE)
+fit_pca_nnet48 %>% readr::write_rds("my_48simple_model.rds")
+fit_pca_nnet48
+```
+
+
+
+
+#Loading of the model
+
+```{r}
+FitLinearModel39 <- readr::read_rds("my_39simple_model.rds")
+FitLinearModel40 <- readr::read_rds("my_40simple_model.rds")
+FitLinearModel41 <- readr::read_rds("my_41simple_model.rds")
+fit_enet_42 <- readr::read_rds("my_42simple_model.rds")
+fit_enet_43 <- readr::read_rds("my_43simple_model.rds")
+fit_rf44 <- readr::read_rds("my_44simple_model.rds")
+fit_svm45 <- readr::read_rds("my_45simple_model.rds")
+fit_nnet_46 <- readr::read_rds("my_46simple_model.rds")
+fit_xgb47 <- readr::read_rds("my_47simple_model.rds")
+fit_xgb47T <- readr::read_rds("my_47Tsimple_model.rds")
+fit_pca_nnet48 <- readr::read_rds("my_48simple_model.rds")
+```
+
+
+```{r}
+my_resultsVClassification<-resamples(list(LM_39 = FitLinearModel39,
+                             LM_40 = FitLinearModel40,
+                             SPLINE_41 = FitLinearModel41,
+                             ENET_42 = fit_enet_42,
+                             ENET_43 = fit_enet_43,
+                             RF44 = fit_rf44,
+                             SVM45 = fit_svm45,
+                             NNET_46 =  fit_nnet_46,
+                             XGB47 = fit_xgb47,
+                             XGB47T = fit_xgb47T,
+                             PCA_NNET48 = fit_pca_nnet48))
+```
+
+
+
+```{r}
+dotplot(my_resultsVClassification)
+```
+
+```{r}
+varImp(fit_xgb47T, scale = FALSE)
+```
+
+# The 5 inputs variable that minimize the categorical responseV are v10, v12, v02, v04 and v06 respectively.
+
+```{r}
+plot(fit_xgb47T, top = 20)
+```
+
+
+
+```{r}
+splom(my_resultsVClassification)
+```
+
+```{r}
+densityplot(my_resultsVClassification)
+```
+
+```{r}
+bwplot(my_resultsVClassification, layout = c(3, 1))
+```
+
+
+
+```{r}
+Explain_VariablesV <- lime::lime(ready_v_B,fit_xgb47T, n_bins = 5)
+```
+
+
+
+
+
+Explanation of all Input features using the first 50 observations for the event in v-variable
+
+```{r}
+ V_VariablesExplain <- lime::explain(
+  x = ready_v_B[50,], 
+  explainer = Explain_VariablesV, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 41, 
+  feature_select = "highest_weights",
+  labels = "event"
+  )
+```
+
+
+
+
+```{r}
+lime::plot_features(V_VariablesExplain)
+```
+
+
+```{r}
+lime::plot_explanations(V_VariablesExplain)
+```
+
+Predictive Visualization and Explanation of all VInput features using the first 50 observations for the non-event
+
+```{r}
+V_VariablesExplain_NonEvent <- lime::explain(
+  x = ready_v_B[50,], 
+  explainer = Explain_VariablesV, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 43, 
+  feature_select = "highest_weights",
+  labels = "non_event"
+  )
+```
+
+
+
+```{r}
+lime::plot_features(V_VariablesExplain_NonEvent)
+```
+
+```{r}
+lime::plot_explanations(V_VariablesExplain_NonEvent)
+```
+
+
+
+## Conclusion
+
+In conclusion Tune XGboost model maximize the accuracy among the candidate models because its false-positive and false-negative is minimal for classifying outcome.  
+
+
+#PART E, INTERPRETATION AND OPTIMIZATION
+
+```{r}
+library(caret)
+```
+
+```{r}
+train_x <- readr::read_csv("train_input_set_x.csv", col_names = TRUE)
+train_v <- readr::read_csv("train_input_set_v.csv", col_names = TRUE)
+train_outputs <- readr::read_csv("train_outputs.csv", col_names = TRUE)
+```
+
+```{r, make_train_set_v_B}
+ready_v_B <- train_v %>% 
+  left_join(train_outputs, by = 'run_id') %>% 
+  select(-run_id, -response) %>% 
+  mutate(outcome = factor(outcome, levels = c("event", "non_event")))
+
+ready_v_B %>% glimpse()
+```
+
+
+
+# My observation is that using V-variables for both regression response and classification outcome increase the performance of my models, the model after tuning and cross-validation techniques perfom up to 99% ROC-AUC metric and 0.99 r-squared metrics for regression in the given hold-out test-set and optimization approach is used with optims to optimized the predictive function to answer minimization problem. Hence I am using V-variable for compilation, even though I loaded both x & v, over X-variables with the best tune neural-network model and Xgboost model respectively as shown below:
+
+
+
+Loading the top model of X and V variable for Regression and Classification Problem
+
+```{r}
+#Regression
+#X-variable
+fit_nnet_14 <- readr::read_rds("my_14simple_model.rds")
+#V-variable
+fit_nnet_24 <- readr::read_rds("my_24simple_model.rds")
+
+
+#Classification
+#X-variable
+fit_xgb37T <- readr::read_rds("my_37Tsimple_model.rds")
+#V-variable
+fit_xgb47T <- readr::read_rds("my_47Tsimple_model.rds")
+```
+
+
+
+
+# Creating the variable important plot according to the best regression output(response)
+
+```{r}
+fit_nnet_reg_vip14 <- fit_nnet_14 %>% varImp() %>%
+  plot()
+fit_nnet_reg_vip14
+
+fit_nnet_reg_vip24 <- fit_nnet_24 %>% varImp() %>%
+  plot()
+```
+
+```{r}
+fit_nnet_reg_vip24
+```
+
+ 
+# Creating the variable important plot according to the best classification output(outcome)
+
+```{r}
+fit_xgb37T_vip <- fit_xgb37T %>% varImp() %>%
+  plot()
+fit_xgb37T_vip
+
+fit_xgb47T_vip <- fit_xgb47T %>% varImp() %>%
+  plot()
+```
+
+
+```{r}
+fit_xgb47T_vip
+```
+
+
+
+```{r}
+holdout_x <- readr::read_csv("holdout_inputs_x.csv", col_names = TRUE)
+```
+
+
+```{r}
+holdout_v <- readr::read_csv("holdout_inputs_v.csv", col_names = TRUE)
+```
+
+
+
+# Prediction of the V-variable using holdout_v for the selected best Regression Model
+```{r}
+y0 = predict(fit_nnet_24, holdout_v) 
+```
+
+# Prediction of the V-variable using holdout_v for the selected best Classification Model
+
+```{r}
+predict(fit_xgb47T, holdout_v) %>% class()
+```
+
+# Prediction of the V-variable probability using holdout_v for the selected best Classification Model
+```{r}
+predict(fit_xgb47T, holdout_v, type = 'prob') %>% class()
+```
+
+```{r}
+predict(fit_xgb47T, holdout_v, type = 'prob') %>% head()
+```
+
+
+```{r}
+predict(fit_nnet_14, holdout_x) %>% class()
+```
+
+```{r}
+predict(fit_xgb37T, holdout_x) %>% class()
+```
+
+```{r}
+predict(fit_xgb37T, holdout_x, type = 'prob') %>% class()
+```
+
+# COMPILING PREDICTION
+
+
+```{r}
+myR_Shiny_Prediction <- tibble::tibble(
+  response = predict(fit_nnet_24, newdata = holdout_v),
+  outcome = predict(fit_xgb47T, newdata = holdout_v)) %>% 
+  bind_cols(
+    predict(fit_xgb47T, newdata = holdout_v, type='prob') %>% 
+      select(probability = event)) %>% 
+  tibble::rowid_to_column("id")
+```
+
+
+
+```{r}
+myR_Shiny_Prediction %>% readr::write_csv("myShinyResult.csv", col_names = TRUE)
+```
+
+
+# Visualizing the event probability with the top 6 variables
+
+
+```{r}
+Explain_VariablesV <- lime::lime(ready_v_B,fit_xgb47T, n_bins = 5)
+```
+
+```{r}
+ V_VariablesExplain <- lime::explain(
+  x = ready_v_B[50,], 
+  explainer = Explain_VariablesV, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 6, 
+  feature_select = "highest_weights",
+  labels = "event"
+  )
+```
+
+
+
+
+```{r}
+lime::plot_features(V_VariablesExplain)
+```
+
+```{r}
+lime::plot_explanations(V_VariablesExplain)
+```
+# Visualization for the top 6 variables the non_event probability 
+
+```{r}
+V_VariablesExplain_NonEvent <- lime::explain(
+  x = ready_v_B[50,], 
+  explainer = Explain_VariablesV, 
+  n_permutations = 500,
+  dist_fun = "gower",
+  kernel_width = 0.75,
+  n_features = 6, 
+  feature_select = "highest_weights",
+  labels = "non_event"
+  )
+```
+
+
+
+```{r}
+lime::plot_features(V_VariablesExplain_NonEvent)
+```
+
+
+```{r}
+lime::plot_explanations(V_VariablesExplain_NonEvent)
+```
+
+# A function that will minimize the V inputs
+
+
+# BONUS PART
+
+# A regression part  using OPTIM for optimization
+
+```{r}
+# 
+objective_func <- function(inputs, model, is_regression)
+{
+  as_list <- expand.grid(
+   v01 = inputs[1],v02 = inputs[2],v03 = inputs[3],v04 = inputs[4],
+   v05 = inputs[5],v06 = inputs[6],v07 = inputs[7],v08 = inputs[8],
+   v09 = inputs[9],v10 = inputs[10],v11 = inputs[11],v12 =inputs[12],
+   v13 = inputs[13],v14 = inputs[14],v15 = inputs[15],
+   v16 = inputs[16],v17 = inputs[17],v18 = inputs[18],v19 = inputs[19],
+   v20 = inputs[20],v21 = inputs[21],v22 = inputs[22],v23 = inputs[23],v24 = inputs[24],v25 = inputs[25],v26 = inputs[26],v27 = inputs[27],v28 = inputs[28],v29 = inputs[29],v30 = inputs[30],v31 = inputs[31],v32 = inputs[32],v33 = inputs[33],v34 = inputs[34],v35 = inputs[35],v36 = inputs[36],
+   v37 = inputs[37],v38 = inputs[38],v39 = inputs[39],v40 = inputs[40],v41 = inputs[41]
+  )
+  if (is_regression)
+  {
+    prediction <- predict(model, as_list)
+    return(prediction)
+  }
+  else
+  {
+    prediction <- predict(model, as_list, type = 'prob')
+    return(prediction$event)
+  }
+}
+```
+
+
+
+
+```{r}
+b <- as.vector(holdout_v)
+guess <- as.numeric(rep(0.5, length(b)))
+
+nnet_reg_fit_a <- optim(
+  guess,
+  objective_func,
+  gr = NULL,
+  fit_nnet_24,
+  TRUE,
+  method = "L-BFGS-B",
+  hessian = FALSE,
+  lower = rep(0, 41),
+  upper = c(rep(1, 4), rep(Inf, 37)),
+  control = list(fnscale = 1)
+)
+
+nnet_reg_fit_a$par
+```
+
+```{r}
+plot(nnet_reg_fit_a$par)
+```
+
+
+
+
+# A classification part for minimizing the probability of event using OPTIM
+
+
+```{r}
+b <- as.vector(holdout_v)
+guess <- as.numeric(rep(0.5, length(b)))
+
+xgb_class_fit47T <- optim(
+  guess,
+  objective_func,
+  gr = NULL,
+  fit_xgb47T,
+  FALSE,
+  method = "L-BFGS-B",
+  hessian = FALSE,
+  lower = rep(0, 41),
+  upper = c(rep(1, 4), rep(Inf, 37)),
+  control = list(fnscale = 1)
+)
+
+xgb_class_fit47T$par
+```
+
+```{r}
+plot(xgb_class_fit47T$par)
+```
+
+
+
+# Input settings that minimize the continuous output and the event probability
+
+As seen from the above optimized visualization, for the binary classification of the inputs variable, only the v04 & v25 input variables minimize the event probability according to the optim minimization approach.
+
+However, for the continuous output variable, only v1,v14,v16,v20,v23 & v26 minimize the continuous output variables according to the optim minimization approach.
+
+
+# Conclusion:
+
+There are more V-variable that minimize the continuous output variables (only v1,v14,v16,v20,v23 & v26) than the one that minimize the event probability (only the v04 & v25).
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
