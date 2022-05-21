@@ -12,7 +12,7 @@ OmitechAI data science portfolio
 ![](/images/downloadeda.png)
 
 # [Project 3: Optimization Problem](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/DataSciencePortfolio.Rmd)
-![](/images/downloadprice.png)
+![](/images/DS.JPG)
 
 # [Project 4: Traffic Network/Datagram Analysis](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/Taiwo_Omileye_2310ProjectNetwork.Rmd)
-![](/images/downloadprice.png)
+![](/images/NT.JPG)
