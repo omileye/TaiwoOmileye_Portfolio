@@ -10,4 +10,4 @@ OmitechAI data science portfolio
 * Using pairplot, violin plot and multidistribution vector to show the correlation of variable with cancer nodes
 * optimized multivariable correlation using heatmap
 ![](/images/downloadeda.png)
-# [Project 3: Optimization Problem]
+# [Project 3: Optimization Problem](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/DataSciencePortfolio.Rmd)
