@@ -1,0 +1,248 @@
+---
+title: "Trace Route Packet Analysis, INFSCI 2310"
+author: "Taiwo Omileye"
+date: "12/10/2021"
+output:
+  word_document: default
+  html_document: default
+Course: Application of Network 2310
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## AIM: 
+
+In this project, the traceroute event of an end-to-end path was examined through data analysis of 5 different domain names/IP address from my residence to the destination path on daily basis. This is to examine the stability of the time-delay and number of routers require as the datagram passes through the end-to-end path. Three measurements on different hours were taken beginning on 11/19/2021 consecutively per day which represents the 15 measurements as x variables (5 domains multiply 3) according to the requirements for a consecutive number of 7 days which also represents y variables according to the requirements. Therefore, the total data points generated is 105 observations (O), x*y datapoints (15 X 7) as shown below. These measurements were taken in every three-hour interval daily. My residence is located around Mcknight road. The five domains I used for this analysis project which is analogous to the corresponding IP address include www.pitt.edu, www.google.com, www.cmu.edu, www.yahoo.com, and www.amazon.com respectively.  
+
+## MATERIAL USED:
+
+R programming language and required packages, traceroute software tool, excel notebook in csv format.
+
+Figure A.
+
+## METHOD:  
+
+Figure A above describe the virtual path my packet takes as I route it from my home to the 5 chosen destination where each router or hops represent the network layer along the path which their total sum for a domain is represented by the MaxHops in the observations (O). The time-delay (milli seconds, ms) at every hop/router for a given destination is represented by HopsTime O. while the total time-delay for all routers in a given domain is Time O. The specific day out of 7 days is represented by day variable O, and the type of measurement out of the three estimation for a day is represented by Measurement variable in O. The granularity used to examined stability are Time (ms) & MaxHops number (integer) in Observation O. The reason for these metrics are varying value of observational effects for each measurement over the 7 days. The stability of the path is examined through the different plot below  and the summary page of each variable. The findings are also summarized in the conclusion part.
+
+
+## OBSERVATION:
+
+```{r, load_tidyverse}
+library(tidyverse)
+library(corrplot)
+library(caret)
+```
+
+```{r}
+df_Analysis <- readr::read_csv('analysis_Project.csv', col_names = TRUE)
+```
+
+```{r}
+df_Analysis %>% glimpse()
+```
+
+### The above indicates that domain 'www.pitt.edu' is the closest Autonomous system, AS, to my dormitory as it has lowest routers/MaxHops, follow by 'www.cmu.edu','www.amazon.com','www.google.com' and 'www.yahoo.com'. This implies domain 'www.yahoo.com' is the longest Autonomous system, AS. to my residence.
+
+```{r}
+#Check for missing values
+visdat::vis_miss(df_Analysis)
+```
+
+
+```{r}
+df_Analysis %>% purrr::map_dbl(n_distinct)
+```
+```{r}
+df_Analysis %>% count(MaxHops)
+```
+### As it can be seen above, the dominant Hops/routers for a given path among the chosen domains is 3 routers indicating out of 5 domains/ autonomous systems, AS. The dominant Hops for an AS has 38 number of occurences and the fact that median of MaxHops equal 3 in the summary figure below.
+```{r}
+df_Analysis %>% count(HopsTime)
+```
+
+
+
+
+### As shown above, out of 105 observations I got. We have 5 unique domains, 8 unique routers' number path, 57ms unique total routers' delay and 7 unique days with 3 measurements for each domain.  
+
+
+```{r}
+df_Analysis %>% count(Time)
+```
+
+
+### The dominants delay for the end-to-end path among my chosen domains is 8 milli-seconds as seen from the above.
+ 
+
+```{r}
+df_Analysis$HopsTime
+```
+
+### The time-taken in milli-seconds at each router level along the end-to-end path is also displayed above, for example the first domain (www.pitt.edu) took 2 Hops/router where each delay are 2ms and 7ms respectively and ditto to others.
+
+
+# Basic Statistics of All Variables
+
+```{r}
+df_Analysis %>% summary()
+```
+
+### Out of my domains/Autonomous system (AS), the minimum total router/MaxHops is 1, its median value is 3 while the maximum one is 12, this is an indication that the lowest AS path to my homen takes 1 router part while the longest AS path has 12 routers along its end-to-end path. The minimum delay for all path is 1ms and the maximum delay is 261ms. The mean for this total delay is 63.48ms while the median is 20, this is an indication of left-skewness among my domains.
+
+
+# Distribution of All variables
+
+```{r}
+df_Analysis %>% select(-c('Destination-Name', 'HopsTime')) %>% 
+  tibble::rowid_to_column() %>% 
+  pivot_longer(!c("rowid")) %>% 
+  ggplot(mapping = aes(x = value)) +
+  geom_histogram(bins = 35) +
+  facet_wrap(~name, scales = "free") +
+  theme_bw() +
+  theme(axis.text.y = element_blank())
+```
+
+# Distribution of correlation among variables
+
+
+```{r}
+df_Analysis %>% select(-c('Destination-Name', 'HopsTime', 'S/N')) %>% cor() %>%
+  corrplot(method="color")
+```
+
+
+# Scatter Plot between Time and Routers
+
+
+
+```{r}
+df_Analysis %>% select(-c('Destination-Name', 'HopsTime', 'S/N')) %>% ggplot()+
+  geom_point(mapping = aes(x=MaxHops, y=Time), color='blue')
+```
+
+### The above correllation plot with scatter plot also indicate a slight positive correllation (0.8) between the total number of routers/MaxHops and time-taken/delay for a given domain, this explains the fact that the higher the path the datagram take to reach its end, the higher will be the delay 
+
+
+
+
+# Scatter Plot between Time and Routers over 7 Days
+
+```{r}
+df_Analysis %>% select(-c('Destination-Name', 'HopsTime', 'S/N')) %>% ggplot()+
+  geom_point(mapping = aes(x=MaxHops, y=Time), color='red')+
+  facet_wrap( ~ day)
+```
+
+### The above shows my measurement over the period of 7 days interval at each facet at different combination of total routers delay/Time and total number of routers required/MaxHops for a given domains/destination. Eventhough, the 7 pictures looks similar, however they are slightly different due to different day of their measurement. The shorter the destination path of datagram propagation, the more stable it is delay-router combination. While the longer the destination path of datagram propagation, the more instability is observed in the delay-router combination. This noticeable difference, however can be attributed to different path the datagram take at each day.
+
+
+# Scatter plot between Time and Routers over 3 Measurments in a Day
+
+```{r}
+df_Analysis %>% select(-c('Destination-Name', 'HopsTime', 'S/N')) %>% ggplot()+
+  geom_point(mapping = aes(x=MaxHops, y=Time), color='orange')+
+  facet_wrap( ~ Measurement)
+```
+
+### The above also shows my measurement over three-hour interval, even though it looks similar, yet the different can be attributted to different routing path and varying activities of the day among the 5 domains.
+
+
+
+
+# Statistics of All Variables
+
+```{r}
+df_Analysis %>% skimr::skim()
+```
+
+### The mean and standard deviation of the total delay/Time are 63.5ms and 83.8ms which is uneven distribution, similarly for the number of router require for a domain, its mean and standard deviation are 5 and 3 respectively.
+
+
+
+# Distribution of the Routers over 7 Days
+
+```{r}
+df_Analysis %>% 
+  ggplot(mapping = aes( x = MaxHops, color='blue')) +
+  geom_freqpoly(bins=30)+
+  facet_wrap ( ~ day)
+```
+
+
+### Above is the distribution of router's number over the 7-day interval of measurement, the figure becomes stable over a long period of time. For example, figure day 1 and day 7 look perfectly equal while daily picture interval is different.
+
+
+
+
+# Distribution of the Delay over 7 Days
+
+
+```{r}
+df_Analysis %>% 
+  ggplot(mapping = aes( x = Time) ) +
+  geom_freqpoly(bins=30)+
+  facet_wrap ( ~ day)
+```
+
+### Similar scenario is observed just like in the MaxHops number over the distribution of total delay over a given domain. Even though, on daily basis each picture looks very different but over a long period of time, the total delay become stabilize. This can be attributted to the stochastic effect of probabilty over a long term.
+
+
+
+# Histogram of the Delay for 5 chosen Domains
+
+```{r}
+df_Analysis %>% ggplot()+
+  geom_histogram(mapping = aes(x=Time), color='blue', bins = 30) 
+```
+
+### Right-skewed distribution of the delay, mean is greater than the median indicating uneven distribution. More delay are tends toward the left side than the middle.
+
+
+
+
+# Distribution of the Delay over Number of Routers
+
+
+
+```{r}
+df_Analysis %>% ggplot()+
+  geom_histogram(mapping = aes(x=Time), color='blue', bins = 30) +
+  facet_wrap(~MaxHops)
+```
+
+
+
+### The distribution of Total delay measurement at each router over the MaxHops require at different domains level. The shortest path domain required 1 router.
+
+
+
+
+## CONCLUSION:
+
+
+
+The aftermath measurement of datagram trace routing over the 5 domains (www.pitt.edu", "www.google.com", "www.cmu.edu", "www.yahoo.com", "www.amazon.com") include:
+
+- The dominant Hops/routers for a given path among the chosen domains is 3 routers indicating out of 5 domains/ autonomous systems, AS. The dominant Hops for an AS has 38 number of occurrences with median value of MaxHops equal 3. This implies majority of my destination require 3 routers.
+
+- Out of the 105 observations I got. We have 5 unique domains/IP destination, 8 unique routers' number path plus 3 higher than the domain uniqueness, 57ms unique total routers' delay/Time  measurements for each domain. This means time delay changes a lot for all domains over the measurement and the dominants delay for the end-to-end path among my chosen domains is 8 milli-seconds.
+
+- The smallest delay at each router for a domain takes 1ms from the first Hops  while longest delay at the last Hops takes 40ms, this can be attributed to the transmission delay and policy requirement over intra-Autonomous system (AS) protocol from the first Hops over the inter-Autonomous system (AS) protocol from another end, last Hops delay.
+
+- There is a positive correlation between the total number of routers/MaxHops for a path and time-taken/delay for a given domain, this explains the fact that the higher the path the datagram take to reach its end, the higher will be the delay. This explain the cause and effect relationship between the two variables. 
+
+- Even though, the 7 measurement moving average looks similar between the delay-router combination plot, however they are slightly different due to different day of their measurement. The shorter the destination path of datagram propagation, the more stable it is delay-router combination. While the longer the destination path of datagram propagation, the more instability is observed in the delay-router combination. This noticeable difference, however can be attributed to different path the datagram take at each day due to less or more  busy link. Similar effect is also observed for the 3 measurements in a given day.
+
+- The mean and standard deviation of the total delay/Time are 63.5ms and 83.8ms, similarly for the number of router require for a domain, its mean and standard deviation are 5 and 3 respectively which indicates an uneven distribution.
+
+- For this experiment and project, it is observed that the stability of the end-to-end path of datagram for a given domain becomes stable over a long term period but becomes unstable over a short term period due to stochastic effects, correlation between delay & MaxHops among others.
+
+
+
+
+
+
+
