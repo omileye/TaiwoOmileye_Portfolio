@@ -11,4 +11,4 @@ OmitechAI data science portfolio
 * optimized multivariable correlation using heatmap
 ![](/images/downloadeda.png)
 # [Project 3: Optimization Problem](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/DataSciencePortfolio.Rmd)
-# [Project 4: Optimization Problem](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/DataSciencePortfolio.Rmd)
+# [Project 4: Optimization Problem](https://github.com/omileye/TaiwoOmileye_Portfolio/blob/main/Taiwo_Omileye_2310ProjectNetwork.Rmd)
