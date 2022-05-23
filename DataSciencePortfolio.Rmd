@@ -5,6 +5,9 @@ date: "5/20/2022"
 output: html_document
 ---
 
+Introduction: This is a manufacturing company machine learning from Pennsylvania, the goal is to find the inputs that minimize the output variables out of 44 variables for x inputs and 42 for v inputs, through machine learning of the independent variables. I used R language to train, tune and validate regression and classification models to predict the outcome for two inputs defination of x and v variables as shown below.
+
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
