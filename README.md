@@ -18,3 +18,5 @@ OmitechAI data science portfolio
 ![](/images/NT.JPG)
 
 # [Project 5: Game Development](https://omileye.itch.io/immersive-media-webbuild)
+
+# [Project 6: Downloadable Game Development](https://omileye.itch.io/immersive-media-application)
